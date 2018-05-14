@@ -1,0 +1,204 @@
+---
+title: "Progetto Metodi finanziari"
+author: "Gabe"
+date: "26 aprile 2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+File con i passaggi per progetto su start up:
+Apro librerie necessarie
+```{r}
+library(tidyverse)
+library(readxl)
+```
+importo da excel
+```{r}
+DS <- read_excel("C:/Users/SuperOrso1/Desktop/Metodi finanziari/Progetto/dataset_fb03.xlsx")
+```
+Elimino le non start up
+```{r}
+DS_1 <- DS %>%
+        filter (Startup_dummy=="si")
+```
+Elimino chi non ha almeno un si nei requisiti
+```{r}
+DS_1 <- DS_1 %>%
+        filter (req_1=="SI"|req_2=="SI"|req_3=="SI")
+```
+
+Seleziono le variabili di mio interesse
+```{r}
+DS_2 <- DS_1 %>%
+        select (Nome,Data_bilancio, ROA,EBITDAmarg,RotazCapInv,IndiIndipFin,IndCorr,Sede_Longitudine,Sede_Latitudine,Website,ATECO_codice)
+```
+Voglio solo chi ha nel bilancio 2016 non voglio Ne NA ne altri anni xk non ha senso confrontare anni diversi
+Quindi prima scompongo data poi tengo solo i 2016
+```{r}
+DS_3 <- DS_2 %>%
+        separate("Data_bilancio", c("Anno", "Mese", "Giorno"), sep = "-")
+DS_3 <- DS_3 %>%
+        filter(Anno=="2016")
+```
+Ora guardo un po di descrittive per vedere se dati hanno senso o devo tagliare
+```{r}
+ggplot(data=DS_3,
+       mapping=aes(x=EBITDAmarg))+
+geom_bar()
+```
+
+ci sono outlier da rimuovere
+
+cose fighe: mappare sull'italia
+
+carico libreria
+```{r}
+library(googleVis)
+```
+
+
+Devo trasformare latitudine e longitudine in numerici sennò non va 
+```{r, echo=FALSE}
+
+DS_3$Sede_Longitudine <-  as.numeric(DS_3$Sede_Longitudine)
+DS_3$Sede_Latitudine <-  as.numeric(DS_3$Sede_Latitudine)
+```
+
+
+Filtro tolgo na
+```{r, echo=FALSE}
+DS_4 <- na.omit(DS_3)
+```
+
+devo creare un unica coordinata per google maps
+```{r}
+DS_5 <- DS_4 %>%
+        unite("Latlong", c("Sede_Latitudine", "Sede_Longitudine"), sep = ":")
+```
+creo la mappa
+```{r,echo=TRUE}
+Mappa <- gvisMap(DS_5,"Latlong",tipvar="Website",
+                     options=list(showTip=TRUE, 
+                                  showLine=TRUE, 
+                                  enableScrollWheel=TRUE,
+                                  mapType='terrain', 
+                                  useMapTypeControl=TRUE))
+plot(Mappa)
+```
+```{r,echo=TRUE}
+write
+```
+http://127.0.0.1:27670/custom/googleVis/MapID1fd05bc50da.html
+```{r,echo=TRUE}
+library(devtools)
+install_github("nicolasturaro/mapIT")
+```
+Voglio creare mappa dove vedo numero di start up per regione
+```{r,echo=TRUE}
+library(mapIT)
+```
+creo data frame per regioni
+```{r,echo=TRUE}
+DS_regio <-DS_1 %>% 
+          select(Nome,Dipendenti,Sede_regione)
+DS_regio <- na.omit(DS_regio)
+DS_regio_1<- DS_regio %>%
+             count(Sede_regione)
+
+DS_regio_1$Sede_regione[DS_regio_1$Sede_regione == "Valle d'Aosta/Vallée d'Aoste"] <- "Valle d'Aosta"
+DS_regio_1 <- as.data.frame(DS_regio_1)
+
+```
+```{r,echo=TRUE}
+mapIT(n, Sede_regione, data=DS_regio_1, show.legend="Number of start-up")
+
+```
+guardo settore informatico ateco 62
+credo dummy per informatico si informatico no:
+prendo solo primi 2 numeri codice ateco
+```{r,echo=TRUE}
+DS_4$Ateco_2 <- substr(DS_4$ATECO_codice, start = 1, stop = 2)
+```
+ora creo dummy
+```{r,echo=TRUE}
+DS_4$informatica <- as.numeric(DS_4$Ateco_2 == 62)
+```
+guardo quanti sono
+```{r,echo=TRUE}
+DS_4$informatica <- as.factor(DS_4$informatica)
+ggplot(data=DS_4,
+       mapping=aes(x=informatica,y=EBITDAmarg))+
+       geom_boxplot()
+```
+```{r,echo=TRUE}
+DS_4 %>%
+    count(informatica)
+
+```
+faccio pulizia degli outlier
+inizio con roa
+```{r,echo=TRUE}
+ggplot(data=DS_4,
+       mapping=aes(x=ROA))+
+geom_bar()
+
+```
+elimino osservazioni che hanno meno di meno dieci che non ha senso
+```{r,echo=TRUE}
+DS_6 <- DS_4 %>%
+       filter(ROA>-10)
+```
+controllo se va bene
+```{r,echo=TRUE}
+ggplot(data=DS_6,
+       mapping=aes(x=ROA))+
+geom_bar()
+
+```
+guardo rotazione capitale investito
+```{r,echo=TRUE}
+ggplot(data=DS_6,
+       mapping=aes(x=RotazCapInv))+
+geom_bar()
+
+```
+guardo ebitda margin
+```{r,echo=TRUE}
+ggplot(data=DS_6,
+       mapping=aes(x=EBITDAmarg))+
+geom_bar()
+
+```
+taglio - 400 e vedo come viene
+```{r,echo=TRUE}
+DS_7 <- DS_6 %>%
+       filter(EBITDAmarg>-400)
+```
+```{r,echo=TRUE}
+ggplot(data=DS_7,
+       mapping=aes(x=EBITDAmarg))+
+geom_bar()
+
+```
+guardo indice indipendenza finanziaria
+```{r,echo=TRUE}
+ggplot(data=DS_7,
+       mapping=aes(x=IndiIndipFin))+
+geom_bar()
+
+```
+taglio negativi perchè non hanno senso
+```{r,echo=TRUE}
+DS_8 <- DS_7 %>%
+       filter(IndiIndipFin>0)
+```
+guardo corrente
+```{r,echo=TRUE}
+ggplot(data=DS_8,
+       mapping=aes(x=IndCorr))+
+geom_bar()
+
+```
+
+
+
