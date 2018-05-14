@@ -1,0 +1,333 @@
+---
+title: "Progetto Metodi finanziari"
+author: "GRUPPO"
+date: "2 maggio 2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+#File con i passaggi per analisi su start up
+
+Apro librerie necessarie
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+library(tidyverse)
+library(readxl)
+```
+Importo dati da excel
+```{r}
+DS <- read_excel("C:/Users/SuperOrso1/Desktop/Metodi finanziari/Progetto/dataset_fb03.xlsx")
+```
+Elimino le non start up
+```{r}
+DS_1 <- DS %>%
+        filter (Startup_dummy=="si")
+```
+Elimino chi non ha almeno un si nei requisiti
+```{r}
+DS_1 <- DS_1 %>%
+        filter (req_1=="SI"|req_2=="SI"|req_3=="SI")
+```
+
+Seleziono le variabili di mio interesse
+```{r}
+DS_2 <- DS_1 %>%
+        select (Nome,Data_bilancio, ROA,EBITDAmarg,RotazCapInv,IndiIndipFin,IndCorr,Sede_Longitudine,Sede_Latitudine,Website,ATECO_codice,Dipendenti,Data_creazione,PrevFemm_red,PrevGiov_red,Sede_regione)
+```
+Voglio solo chi ha nel bilancio 2016
+Quindi prima scompongo data poi tengo solo i 2016
+```{r}
+DS_3 <- DS_2 %>%
+        separate("Data_bilancio", c("Anno", "Mese", "Giorno"), sep = "-")
+DS_3 <- DS_3 %>%
+        filter(Anno=="2016")
+```
+Scompongo data di creazione
+```{r}
+DS_3 <- DS_3 %>%
+        separate("Data_creazione", c("Anno", "Mese", "Giorno"), sep = "-")
+```
+Filtro tolgo na
+```{r, echo=FALSE}
+DS_4 <- na.omit(DS_3)
+```
+guardo settore informatico ateco 62:
+
+prendo solo primi 2 numeri codice ateco
+```{r,echo=TRUE}
+DS_4$Ateco_2 <- substr(DS_4$ATECO_codice, start = 1, stop = 2)
+```
+ora creo dummy
+```{r,echo=TRUE}
+DS_4$informatica <- as.numeric(DS_4$Ateco_2 == 62)
+```
+guardo quanti sono
+```{r,echo=TRUE}
+DS_4$informatica <- as.factor(DS_4$informatica)
+DS_4 %>%
+    count(informatica)
+
+```
+Seleziono solo aziende informatiche
+```{r,,echo=TRUE}
+DS_4<-    DS_4 %>%
+          filter(informatica==1)
+```
+##faccio pulizia degli outlier:
+
+
+inizio con roa
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+ggplot(data=DS_4,
+       mapping=aes(x=ROA))+
+geom_histogram()
+
+summary(DS_4$ROA)
+quantile(DS_4$ROA,0.01)
+
+```
+guardo rotazione capitale investito
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+ggplot(data=DS_4,
+       mapping=aes(x=RotazCapInv))+
+geom_histogram()
+summary(DS_4$RotazCapInv)
+```
+guardo ebitda margin
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+ggplot(data=DS_4,
+       mapping=aes(x=EBITDAmarg))+
+geom_histogram()
+summary(DS_4$EBITDAmarg)
+quantile(DS_4$EBITDAmarg,0.01)
+```
+taglio - 500 e vedo come viene
+```{r,echo=TRUE}
+DS_5 <- DS_4 %>%
+       filter(EBITDAmarg>-500)
+```
+
+guardo indice indipendenza finanziaria
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+ggplot(data=DS_5,
+       mapping=aes(x=IndiIndipFin))+
+geom_histogram()
+summary(DS_4$IndiIndipFin)
+```
+
+guardo corrente
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+ggplot(data=DS_5,
+       mapping=aes(x=IndCorr))+
+geom_histogram()
+summary(DS_4$IndCorr)
+
+```
+##mappare sull'italia
+mappa regioni per start-up
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+library(devtools)
+install_github("nicolasturaro/mapIT")
+```
+apro library 
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+library(mapIT)
+```
+creo data frame per regioni
+```{r,echo=TRUE}
+DS_regio <-DS_5 %>% 
+          select(Nome,Dipendenti,Sede_regione)
+DS_regio <- na.omit(DS_regio)
+DS_regio_1<- DS_regio %>%
+             count(Sede_regione)
+
+DS_regio_1$Sede_regione[DS_regio_1$Sede_regione == "Valle d'Aosta/Vallée d'Aoste"] <- "Valle d'Aosta"
+DS_regio_1 <- as.data.frame(DS_regio_1)
+
+```
+creo mappa start up per regioni
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+mapIT(n, Sede_regione, data=DS_regio_1)
+
+```
+
+##Inizio analisi componenti principali dopo pulizia
+
+library componenti principali
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+dati<-as.data.frame(DS_5)
+```
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+library(Rcmdr)
+library(psych)
+```
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+library(FactoMineR)
+```
+
+PCA su factoMineR
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+dati.PCA<-dati[, c("ROA", "EBITDAmarg", "RotazCapInv", "IndiIndipFin", 
+  "IndCorr")]
+res<-PCA(dati.PCA , scale.unit=TRUE, ncp=5, graph = FALSE)
+plot.PCA(res, axes=c(1, 2), choix="ind", habillage="none", col.ind="black", 
+  col.ind.sup="blue", col.quali="magenta", label=c("ind", "ind.sup", "quali"),
+  new.plot=TRUE)
+plot.PCA(res, axes=c(1, 2), choix="var", new.plot=TRUE, col.var="black", 
+  col.quanti.sup="blue", label=c("var", "quanti.sup"), lim.cos2.var=0)
+summary(res, nb.dec = 3, nbelements=10, nbind = 10, ncp = 3, file="")
+remove(dati.PCA)
+```
+
+Ruoto le componenti principali per dargli un significato al meglio tramite altro pacchetto
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+data_rot<-subset(dati, select = c(ROA,EBITDAmarg, RotazCapInv, IndiIndipFin, IndCorr))
+ro<-principal(data_rot,nfactors=3,rotate = "varimax", scores = T)
+ro
+```
+Si evidenziano 3 componenti principali una correlata con redditività
+una con capitalizzazione e una con la rotazione del capitale investito.
+
+Creo nuovo dataframe con le prime 3 componenti principali
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+Dati_pca <- ro$scores
+Dati_pca <- as.data.frame(Dati_pca)
+```
+ora faccio mappa fattoriale degli individui
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+library("scatterplot3d")
+```
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+scatterplot3d(Dati_pca[,1:3],box=FALSE)
+```
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+ggplot(data=Dati_pca)
+     
+```
+
+validazione empirica
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+v <- NULL
+for(i in 1:1000){
+a1 <- rnorm(632)
+a2 <- rnorm(632)
+a3 <- rnorm(632)
+a4 <- rnorm(632) 
+a5 <- rnorm(632)
+df <- data.frame(a1,a2,a3,a4,a5)
+pca_dati <- PCA(df,graph = F)
+a <- pca_dati$eig[2,3]
+v <- c(v,a)
+  
+}
+  
+```
+Ad ogni passaggio in v viene inserito un valore a e poi riassegnando allo stesso nome
+posso mantenere in memoria tutti gli a gia aggiunti e ad ogni passaggio aggiungo il nuovo valore di a.
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+hist(v)
+quantile(v,0.95)
+summary(v)
+
+```
+Quindi il nostro risultato non è casuale
+Metto componenti principali nel dataset con le altre variabili
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+dati_finali<-cbind.data.frame(dati,Dati_pca)
+```
+mappa fattoriale individui per prevalenze
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+ggplot(data= dati_finali)+
+      geom_point(mapping = aes(x=RC1,y=RC2,color=PrevGiov_red))
+      
+```
+
+##Analisi dei gruppi
+Faccio su Rcmdr
+
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+Hc_dati <- hclust(dist(model.matrix(~-1 + 
+  EBITDAmarg+IndCorr+IndiIndipFin+ROA+RotazCapInv, dati_finali)) , method= 
+  "ward")
+plot(Hc_dati, main= "Cluster Dendrogram for Solution Hc_dati", xlab= 
+  "Observation Number in Data Set dati_finali", 
+  sub="Method=ward; Distance=euclidian")
+gruppi<-631:1
+plot(Hc_dati$height,gruppi,type="b",xlab = "Distanza di unione", xlim=c(0,1000), ylim=c(0,100))
+plot(Hc_dati$height,gruppi,type="b",xlab = "Distanza di unione", xlim=c(0,1000), ylim=c(0,25))
+```
+Scelgo 15 gruppi
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+dati_finali$hclus.label <- assignCluster(model.matrix(~-1 + EBITDAmarg + IndCorr + IndiIndipFin + 
+  ROA + RotazCapInv, dati_finali), dati_finali, cutree(Hc_dati, k = 15))
+```
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+by(model.matrix(~-1 + EBITDAmarg + IndCorr + IndiIndipFin + 
+  ROA + RotazCapInv, dati_finali), as.factor(cutree(Hc_dati, k = 15)), colMeans)
+```
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+Anova <- aov(RotazCapInv ~ hclus.label, data=dati_finali)
+summary(Anova)
+with(dati_finali, numSummary(RotazCapInv, groups=hclus.label, statistics=c("mean", "sd")))
+
+```
+
+##Analisi dei gruppi su componenti princ
+Faccio su Rcmdr
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+Hc_dati <- hclust(dist(model.matrix(~-1 + 
+  RC1+RC2+RC3, dati_finali)) , method= 
+  "ward")
+plot(Hc_dati, main= "Cluster Dendrogram for Solution Hc_dati", xlab= 
+  "Observation Number in Data Set dati_finali", 
+  sub="Method=ward; Distance=euclidian")
+plot(Hc_dati$height,gruppi,type="b",xlab = "Distanza di unione", xlim=c(0,1000))
+```
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+Hc_dati <- hclust(dist(model.matrix(~-1 + 
+  RC1+RC2+RC3, dati_finali)) , method= 
+  "ward")
+plot(Hc_dati, main= "Cluster Dendrogram for Solution Hc_dati", xlab= 
+  "Observation Number in Data Set dati_finali", 
+  sub="Method=ward; Distance=euclidian")
+gruppi<-631:1
+plot(Hc_dati$height,gruppi,type="b",xlab = "Distanza di unione", xlim=c(0,1000), ylim=c(0,100))
+plot(Hc_dati$height,gruppi,type="b",xlab = "Distanza di unione", xlim=c(0,1000), ylim=c(0,25))
+```
+Scelgo 4  gruppi
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+dati_finali$hclus.label <- assignCluster(model.matrix(~-1 + RC1+RC2+RC3, dati_finali), dati_finali, cutree(Hc_dati, k = 4))
+```
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+by(model.matrix(~-1 + RC1+RC2+RC3, dati_finali), as.factor(cutree(Hc_dati, k = 4)), colMeans)
+```
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+Anova <- aov(RotazCapInv ~ hclus.label, data=dati_finali)
+summary(Anova)
+with(dati_finali, numSummary(RotazCapInv, groups=hclus.label, statistics=c("mean", "sd")))
+
+```
+
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+medie<- dati_finali %>%
+       group_by(hclus.label) %>%
+       summarise(mean(Dipendenti))
+medie
+```
+Creo matrice per descrivere i gruppi
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+c<-unlist((by(model.matrix(~-1 + RC1+RC2+RC3, dati_finali), as.factor(cutree(Hc_dati, k = 4)), colMeans)))
+df<-as.data.frame(c)
+group1<-df[1:3,]
+group2<-df[4:6,]
+group3<-df[7:9,]
+group4<-df[10:12,]
+
+data_sfizio<-cbind.data.frame(group1,group2,group3,group4)
+data_sfizio1<-as.data.frame(t.data.frame(data_sfizio))
+data_sfizio1$V4<-medie$`mean(Dipendenti)`
+names(data_sfizio1)<-c("Redd","Solv","Turn","Dip")
+data_sfizio1
+```
+
+
+
