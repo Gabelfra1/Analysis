@@ -38,6 +38,12 @@ df_pulito <- subset(df_pulito, !grepl("non venne assegnato", df_pulito$Film))
 nazioni_contatore <- as.data.frame(str_split_fixed(df_pulito$Nazione, "/", 3))
 df_pulito <- cbind.data.frame(nazioni_contatore,df_pulito)
 
+df_temp_1 <- as.vector( df_pulito$V1)
+df_temp_2 <- as.vector( df_pulito$V2)
+df_temp_3 <- as.vector( df_pulito$V3)
+
+df_finale <- c(df_temp_1,df_temp_2,df_temp_3)
+df_finale <- as.data.frame(df_finale)
 ```
 
 Scrivo csv
@@ -49,10 +55,11 @@ write_csv(df_pulito, "tabella.csv")
 Faccio il group by per nazione
 
 ```{r}
-nazioni <- df_pulito %>% 
-           group_by(V1) %>% 
+nazioni <- df_finale %>% 
+           group_by(df_finale) %>% 
            count() %>% 
            arrange(-n)
+nazioni <- nazioni[-1,]
 ```
 
 csv
@@ -63,7 +70,7 @@ write_csv(nazioni, "nazioni.csv")
 Faccio grafico
 
 ```{r}
-ggplot(data=nazioni, aes(x=reorder(V1,n), y=n)) +
+ggplot(data=nazioni, aes(x=reorder(df_finale,n), y=n)) +
     geom_bar(stat="identity",fill = "red")+
     coord_flip()+  
   ggtitle("Vincitori per paese d'origine") +
